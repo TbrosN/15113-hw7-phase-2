@@ -153,7 +153,7 @@ class Player:
         for row in range(ROWS):
             for col in range(COLS):
                 tile = LEVEL_MAP[row][col]
-                if tile not in (0, 3):
+                if tile != 0:
                     continue
                 pellet_x = (col * TILE_SIZE) + (TILE_SIZE // 2)
                 pellet_y = (row * TILE_SIZE) + (TILE_SIZE // 2)
