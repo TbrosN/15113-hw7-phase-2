@@ -5,9 +5,7 @@ import math
 # --- 1. SETTINGS & CONSTANTS ---
 pygame.init()
 
-DEFAULT_TILE_SIZE = 40
-MIN_TILE_SIZE = 16
-UI_HEIGHT = 50
+TILE_SIZE = 40
 FPS = 60
 
 # Colors
@@ -48,14 +46,8 @@ ORIGINAL_MAP = [
 LEVEL_MAP = [[tile for tile in row] for row in ORIGINAL_MAP]
 COLS = len(LEVEL_MAP[0])
 ROWS = len(LEVEL_MAP)
-
-# Fit the game board to about 90% of the current screen height.
-_, desktop_height = pygame.display.get_desktop_sizes()[0]
-target_window_height = int(desktop_height * 0.75)
-available_map_height = max(ROWS * MIN_TILE_SIZE, target_window_height - UI_HEIGHT)
-
-TILE_SIZE = min(DEFAULT_TILE_SIZE, max(MIN_TILE_SIZE, available_map_height // ROWS))
 WIDTH = COLS * TILE_SIZE
+UI_HEIGHT = 50
 HEIGHT = (ROWS * TILE_SIZE) + UI_HEIGHT
 
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
