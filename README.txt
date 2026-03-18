@@ -1,5 +1,5 @@
-This is a simple version of pacman where there are not yet powerups or fruits,
-and the grid has each tile at the same size, so a different sized level would
+This is a simple version of pacman with pellets, powerups, and bonus fruit.
+The grid has each tile at the same size, so a different sized level would
 require a different sized window. The file begins with some global constants
 such as the level map, colors and sizes that will be needed by multiple
 functions. Then it moves into player and ghost classes and then finishes with

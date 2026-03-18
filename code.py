@@ -5,7 +5,7 @@ import math
 # --- 1. SETTINGS & CONSTANTS ---
 pygame.init()
 
-TILE_SIZE = 40
+TILE_SIZE = 30
 FPS = 60
 
 # Colors
@@ -17,6 +17,9 @@ RED = (255, 0, 0)
 PINK = (255, 182, 193)
 CYAN = (0, 255, 255)
 ORANGE = (255, 165, 0)
+GREEN = (0, 255, 0)
+PURPLE = (160, 32, 240)
+DEEP_BLUE = (30, 30, 255)
 
 # Master map copy
 ORIGINAL_MAP = [
@@ -50,6 +53,29 @@ WIDTH = COLS * TILE_SIZE
 UI_HEIGHT = 50
 HEIGHT = (ROWS * TILE_SIZE) + UI_HEIGHT
 
+POWERUP_DURATION_FRAMES = FPS * 8
+FRUIT_DURATION_FRAMES = FPS * 8
+FRUIT_SPAWN_SCORES = [250, 750]
+FRUIT_POSITION = (9, 11)
+
+
+def place_power_pellets():
+    # Four classic corner-ish locations that are currently open paths.
+    power_positions = [(1, 3), (17, 3), (1, 15), (17, 15)]
+    for col, row in power_positions:
+        if LEVEL_MAP[row][col] != 1:
+            LEVEL_MAP[row][col] = 3
+
+
+def reset_board_map():
+    for r in range(ROWS):
+        for c in range(COLS):
+            LEVEL_MAP[r][c] = ORIGINAL_MAP[r][c]
+    place_power_pellets()
+
+
+reset_board_map()
+
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Pac-Man: Life and Death")
 clock = pygame.time.Clock()
@@ -67,6 +93,7 @@ class Player:
         self.score = 0
         self.lives = 3 # NEW: The safety net
         self.death_timer = 0 # NEW: Tracks the death animation
+        self.power_timer = 0
 
         self.reset_position()
 
@@ -81,6 +108,9 @@ class Player:
         self.death_timer = 0
 
     def update(self, keys):
+        ate_powerup = False
+        cleared_board = False
+
         if keys[pygame.K_LEFT]:
             self.queued_dx = -self.speed; self.queued_dy = 0
         elif keys[pygame.K_RIGHT]:
@@ -125,11 +155,22 @@ class Player:
         if LEVEL_MAP[current_row][current_col] == 0:
             LEVEL_MAP[current_row][current_col] = 2
             self.score += 10
-            if not any(0 in row for row in LEVEL_MAP):
-                for r in range(ROWS):
-                    for c in range(COLS): LEVEL_MAP[r][c] = ORIGINAL_MAP[r][c]
-                self.reset_position()
-                # Need to return a signal to reset ghosts too, but for now this is fine.
+        elif LEVEL_MAP[current_row][current_col] == 3:
+            LEVEL_MAP[current_row][current_col] = 2
+            self.score += 50
+            self.power_timer = POWERUP_DURATION_FRAMES
+            ate_powerup = True
+
+        if self.power_timer > 0:
+            self.power_timer -= 1
+
+        has_pellets_left = any(0 in row or 3 in row for row in LEVEL_MAP)
+        if not has_pellets_left:
+            reset_board_map()
+            self.reset_position()
+            cleared_board = True
+
+        return ate_powerup, cleared_board
 
     def draw(self, surface, game_state):
         # Don't draw if dead-dead
@@ -177,6 +218,7 @@ class Ghost:
         self.color = color
         self.name = name
         self.speed = 2
+        self.frightened_flash_timer = 0
 
         self.reset_position()
 
@@ -188,7 +230,7 @@ class Ghost:
         self.spawn_timer = self.initial_spawn_delay
         self.dx = 0; self.dy = 0
 
-    def update(self, target_player, blinky_ref):
+    def update(self, target_player, blinky_ref, power_active):
         if self.state == 'trapped':
             self.spawn_timer -= 1
             if self.spawn_timer <= 0:
@@ -252,7 +294,10 @@ class Ghost:
                 valid_moves.append((distance, move_dx, move_dy))
 
             if valid_moves:
-                valid_moves.sort(key=lambda x: x[0])
+                if power_active:
+                    valid_moves.sort(key=lambda x: x[0], reverse=True)
+                else:
+                    valid_moves.sort(key=lambda x: x[0])
                 self.dx = valid_moves[0][1]; self.dy = valid_moves[0][2]
 
         self.x += self.dx; self.y += self.dy
@@ -268,7 +313,8 @@ class Ghost:
             (14, 4), (10, 15), (5, 10), (0, 15), (-5, 10), (-10, 15)
         ]
         real_points = [(self.x + px, self.y + py) for px, py in body_points]
-        pygame.draw.polygon(surface, self.color, real_points)
+        draw_color = DEEP_BLUE if getattr(player, "power_timer", 0) > 0 else self.color
+        pygame.draw.polygon(surface, draw_color, real_points)
 
         eye_color = WHITE
         iris_color = BLUE
@@ -298,6 +344,10 @@ ghosts = [blinky, pinky, inky, clyde]
 # NEW: The core state machine
 game_state = "PLAYING" # Can be: PLAYING, DYING, GAME_OVER
 
+fruit_active = False
+fruit_timer = 0
+next_fruit_index = 0
+
 # --- 5. GAME LOOP ---
 running = True
 while running:
@@ -308,18 +358,52 @@ while running:
     # --- LOGIC UPDATES ---
     if game_state == "PLAYING":
         keys = pygame.key.get_pressed()
-        player.update(keys)
+        ate_powerup, cleared_board = player.update(keys)
+
+        if ate_powerup:
+            # Quick turnaround when the player grabs a power pellet.
+            for ghost in ghosts:
+                if ghost.state == "chasing":
+                    ghost.dx *= -1
+                    ghost.dy *= -1
+
+        if cleared_board:
+            for ghost in ghosts:
+                ghost.reset_position()
+            fruit_active = False
+            fruit_timer = 0
+
+        if next_fruit_index < len(FRUIT_SPAWN_SCORES) and player.score >= FRUIT_SPAWN_SCORES[next_fruit_index]:
+            fruit_active = True
+            fruit_timer = FRUIT_DURATION_FRAMES
+            next_fruit_index += 1
+
+        if fruit_active:
+            fruit_timer -= 1
+            if fruit_timer <= 0:
+                fruit_active = False
+
+            fruit_col, fruit_row = FRUIT_POSITION
+            fruit_x = (fruit_col * TILE_SIZE) + (TILE_SIZE // 2)
+            fruit_y = (fruit_row * TILE_SIZE) + (TILE_SIZE // 2)
+            if math.hypot(player.x - fruit_x, player.y - fruit_y) < TILE_SIZE // 2:
+                fruit_active = False
+                player.score += 100
 
         for ghost in ghosts:
-            ghost.update(player, blinky)
+            ghost.update(player, blinky, player.power_timer > 0)
 
             # THE COLLISION CHECK
             # We use the Pythagorean theorem to check distance between centers.
             # If it's less than half a tile, we have a collision.
             distance = math.hypot(player.x - ghost.x, player.y - ghost.y)
             if distance < TILE_SIZE // 2:
-                game_state = "DYING"
-                player.death_timer = 0
+                if player.power_timer > 0 and ghost.state == "chasing":
+                    player.score += 200
+                    ghost.reset_position()
+                else:
+                    game_state = "DYING"
+                    player.death_timer = 0
 
     elif game_state == "DYING":
         player.death_timer += 1
@@ -349,6 +433,16 @@ while running:
                 pygame.draw.rect(screen, BLUE, wall_rect, 2)
             elif tile == 0:
                 pygame.draw.circle(screen, WHITE, (col_idx * TILE_SIZE + TILE_SIZE // 2, row_idx * TILE_SIZE + TILE_SIZE // 2), 4)
+            elif tile == 3:
+                pygame.draw.circle(screen, WHITE, (col_idx * TILE_SIZE + TILE_SIZE // 2, row_idx * TILE_SIZE + TILE_SIZE // 2), 9)
+
+    if fruit_active:
+        fruit_col, fruit_row = FRUIT_POSITION
+        fruit_x = (fruit_col * TILE_SIZE) + (TILE_SIZE // 2)
+        fruit_y = (fruit_row * TILE_SIZE) + (TILE_SIZE // 2)
+        pygame.draw.circle(screen, RED, (fruit_x, fruit_y), 10)
+        pygame.draw.circle(screen, GREEN, (fruit_x - 5, fruit_y - 9), 4)
+        pygame.draw.circle(screen, PURPLE, (fruit_x + 5, fruit_y - 9), 4)
 
     # Draw the entities (passing in the game state so they know how to behave)
     player.draw(screen, game_state)
