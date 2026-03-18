@@ -1,6 +1,7 @@
 import pygame
 import sys
 import math
+from levels import LEVELS
 
 # --- 1. SETTINGS & CONSTANTS ---
 pygame.init()
@@ -21,50 +22,30 @@ GREEN = (0, 255, 0)
 PURPLE = (160, 32, 240)
 DEEP_BLUE = (30, 30, 255)
 
-# Master map copy
-ORIGINAL_MAP = [
-    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-    [1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 0, 1],
-    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 0, 1],
-    [1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1],
-    [1, 1, 1, 1, 0, 1, 1, 1, 2, 1, 2, 1, 1, 1, 0, 1, 1, 1, 1],
-    [2, 2, 2, 1, 0, 1, 2, 2, 2, 2, 2, 2, 2, 1, 0, 1, 2, 2, 2],
-    [1, 1, 1, 1, 0, 1, 2, 1, 1, 2, 1, 1, 2, 1, 0, 1, 1, 1, 1],
-    [2, 2, 2, 2, 0, 2, 2, 1, 2, 2, 2, 1, 2, 2, 0, 2, 2, 2, 2],
-    [1, 1, 1, 1, 0, 1, 2, 1, 1, 1, 1, 1, 2, 1, 0, 1, 1, 1, 1],
-    [2, 2, 2, 1, 0, 1, 2, 2, 2, 2, 2, 2, 2, 1, 0, 1, 2, 2, 2],
-    [1, 1, 1, 1, 0, 1, 2, 1, 1, 1, 1, 1, 2, 1, 0, 1, 1, 1, 1],
-    [1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 0, 1],
-    [1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1],
-    [1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1],
-    [1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1],
-    [1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1],
-    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
-]
-
-PLAYER_START = (1, 1)
-FRUIT_POSITION = (9, 11)
-FRUIT_SPAWN_SCORES = [250, 750]
-POWER_PELLET_POSITIONS = [(1, 3), (17, 3), (1, 15), (17, 15)]
-MAGNET_POWERUP_POSITIONS = [(1, 3), (17, 15)]
-GHOST_EXIT = (9, 7)
-GHOST_CONFIGS = [
-    (9, 9, RED, "Blinky", 0),
-    (9, 9, PINK, "Pinky", FPS * 2),
-    (8, 9, CYAN, "Inky", FPS * 4),
-    (10, 9, ORANGE, "Clyde", FPS * 6),
-]
-
-LEVEL_MAP = [[tile for tile in row] for row in ORIGINAL_MAP]
-COLS = len(LEVEL_MAP[0])
-ROWS = len(LEVEL_MAP)
-WIDTH = COLS * TILE_SIZE
 UI_HEIGHT = 50
-HEIGHT = (ROWS * TILE_SIZE) + UI_HEIGHT
+
+GHOST_COLORS = {
+    "Blinky": RED,
+    "Pinky": PINK,
+    "Inky": CYAN,
+    "Clyde": ORANGE,
+}
+
+# Active level data is loaded at runtime from levels.py
+ORIGINAL_MAP = []
+LEVEL_MAP = []
+PLAYER_START = (0, 0)
+FRUIT_POSITION = (0, 0)
+FRUIT_SPAWN_SCORES = []
+POWER_PELLET_POSITIONS = []
+MAGNET_POWERUP_POSITIONS = []
+GHOST_EXIT = (0, 0)
+GHOST_CONFIGS = []
+COLS = 0
+ROWS = 0
+WIDTH = 0
+HEIGHT = UI_HEIGHT
+current_level_index = 0
 
 POWERUP_DURATION_FRAMES = FPS * 8
 MAGNET_DURATION_FRAMES = FPS * 8
@@ -106,10 +87,6 @@ def draw_magnet_icon(surface, center_x, center_y, radius=9):
     pygame.draw.rect(surface, RED, (center_x + tip_offset, tip_y, tip_size, tip_size))
     pygame.draw.rect(surface, WHITE, (center_x + tip_offset - tip_size, tip_y, tip_size, tip_size))
 
-
-reset_board_map()
-
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Pac-Man: Life and Death")
 clock = pygame.time.Clock()
 font = pygame.font.SysFont("Arial", 28, bold=True)
@@ -397,25 +374,67 @@ class Ghost:
         pygame.draw.circle(surface, iris_color, (right_eye_pos[0] + iris_x, right_eye_pos[1] + iris_y), 2)
 
 
-# --- 4. MAIN GAME SETUP ---
-player = Player(PLAYER_START[0], PLAYER_START[1])
-ghosts = [Ghost(*ghost_config) for ghost_config in GHOST_CONFIGS]
-blinky = next((ghost for ghost in ghosts if ghost.name == "Blinky"), ghosts[0])
+def load_level(level_index, keep_progress=False):
+    global current_level_index, ORIGINAL_MAP, LEVEL_MAP
+    global PLAYER_START, FRUIT_POSITION, FRUIT_SPAWN_SCORES
+    global POWER_PELLET_POSITIONS, MAGNET_POWERUP_POSITIONS, GHOST_EXIT, GHOST_CONFIGS
+    global COLS, ROWS, WIDTH, HEIGHT
+    global screen, player, ghosts, blinky
+    global fruit_active, fruit_timer, next_fruit_index
 
+    previous_score = player.score if keep_progress and "player" in globals() else 0
+    previous_lives = player.lives if keep_progress and "player" in globals() else 3
+
+    current_level_index = level_index % len(LEVELS)
+    level_data = LEVELS[current_level_index]
+
+    ORIGINAL_MAP = [row[:] for row in level_data["map"]]
+    PLAYER_START = level_data["player_start"]
+    FRUIT_POSITION = level_data["fruit_position"]
+    FRUIT_SPAWN_SCORES = list(level_data["fruit_spawn_scores"])
+    POWER_PELLET_POSITIONS = list(level_data["power_pellets"])
+    MAGNET_POWERUP_POSITIONS = list(level_data["magnet_powerups"])
+    GHOST_EXIT = level_data["ghost_exit"]
+    GHOST_CONFIGS = list(level_data["ghost_spawns"])
+
+    LEVEL_MAP = [row[:] for row in ORIGINAL_MAP]
+    ROWS = len(LEVEL_MAP)
+    COLS = len(LEVEL_MAP[0])
+    WIDTH = COLS * TILE_SIZE
+    HEIGHT = (ROWS * TILE_SIZE) + UI_HEIGHT
+
+    place_power_pellets()
+    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+
+    player = Player(PLAYER_START[0], PLAYER_START[1])
+    player.score = previous_score
+    player.lives = previous_lives
+
+    ghosts = [
+        Ghost(col, row, GHOST_COLORS[name], name, spawn_delay)
+        for col, row, name, spawn_delay in GHOST_CONFIGS
+    ]
+    blinky = next((ghost for ghost in ghosts if ghost.name == "Blinky"), ghosts[0])
+
+    fruit_active = False
+    fruit_timer = 0
+    next_fruit_index = 0
+
+
+# --- 4. MAIN GAME SETUP ---
+screen = None
+player = None
+ghosts = []
+blinky = None
 fruit_active = False
 fruit_timer = 0
 next_fruit_index = 0
+load_level(0, keep_progress=False)
 
 
 def reset_game():
     global game_state, level_clear_timer, fruit_active, fruit_timer, next_fruit_index
-    reset_board_map()
-    player.score = 0
-    player.lives = 3
-    player.reset_position()
-    player.clear_powerups()
-    for ghost in ghosts:
-        ghost.reset_position()
+    load_level(0, keep_progress=False)
     game_state = "PLAYING"
     level_clear_timer = 0
     fruit_active = False
@@ -505,11 +524,7 @@ while running:
     elif game_state == "LEVEL_CLEAR":
         level_clear_timer += 1
         if level_clear_timer >= LEVEL_CLEAR_DURATION_FRAMES:
-            reset_board_map()
-            player.reset_position()
-            player.clear_powerups()
-            for ghost in ghosts:
-                ghost.reset_position()
+            load_level(current_level_index + 1, keep_progress=True)
             game_state = "PLAYING"
 
     elif game_state == "DYING":
