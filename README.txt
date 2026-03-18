@@ -1,4 +1,5 @@
-This is a simple version of pacman with pellets, powerups, and bonus fruit.
+This is a simple version of pacman with pellets, powerups, bonus fruit, and
+a level-clear wall blinking animation.
 The grid has each tile at the same size, so a different sized level would
 require a different sized window. The file begins with some global constants
 such as the level map, colors and sizes that will be needed by multiple

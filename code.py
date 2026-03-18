@@ -46,6 +46,18 @@ ORIGINAL_MAP = [
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 ]
 
+PLAYER_START = (1, 1)
+FRUIT_POSITION = (9, 11)
+FRUIT_SPAWN_SCORES = [250, 750]
+POWER_PELLET_POSITIONS = [(1, 3), (17, 3), (1, 15), (17, 15)]
+GHOST_EXIT = (9, 7)
+GHOST_CONFIGS = [
+    (9, 9, RED, "Blinky", 0),
+    (9, 9, PINK, "Pinky", FPS * 2),
+    (8, 9, CYAN, "Inky", FPS * 4),
+    (10, 9, ORANGE, "Clyde", FPS * 6),
+]
+
 LEVEL_MAP = [[tile for tile in row] for row in ORIGINAL_MAP]
 COLS = len(LEVEL_MAP[0])
 ROWS = len(LEVEL_MAP)
@@ -55,14 +67,12 @@ HEIGHT = (ROWS * TILE_SIZE) + UI_HEIGHT
 
 POWERUP_DURATION_FRAMES = FPS * 8
 FRUIT_DURATION_FRAMES = FPS * 8
-FRUIT_SPAWN_SCORES = [250, 750]
-FRUIT_POSITION = (9, 11)
+LEVEL_CLEAR_DURATION_FRAMES = FPS * 2
+LEVEL_CLEAR_BLINK_INTERVAL = 8
 
 
 def place_power_pellets():
-    # Four classic corner-ish locations that are currently open paths.
-    power_positions = [(1, 3), (17, 3), (1, 15), (17, 15)]
-    for col, row in power_positions:
+    for col, row in POWER_PELLET_POSITIONS:
         if LEVEL_MAP[row][col] != 1:
             LEVEL_MAP[row][col] = 3
 
@@ -135,7 +145,8 @@ class Player:
             q_col = (col + (1 if self.queued_dx > 0 else -1 if self.queued_dx < 0 else 0)) % COLS
             q_row = row + (1 if self.queued_dy > 0 else -1 if self.queued_dy < 0 else 0)
 
-            if LEVEL_MAP[q_row][q_col] != 1:
+            queued_in_bounds = 0 <= q_row < ROWS
+            if queued_in_bounds and LEVEL_MAP[q_row][q_col] != 1:
                 self.dx = self.queued_dx; self.dy = self.queued_dy
                 if self.dx > 0: self.direction = 0
                 elif self.dx < 0: self.direction = math.pi
@@ -144,7 +155,8 @@ class Player:
             else:
                 curr_col = (col + (1 if self.dx > 0 else -1 if self.dx < 0 else 0)) % COLS
                 curr_row = row + (1 if self.dy > 0 else -1 if self.dy < 0 else 0)
-                if LEVEL_MAP[curr_row][curr_col] == 1:
+                curr_in_bounds = 0 <= curr_row < ROWS
+                if (not curr_in_bounds) or LEVEL_MAP[curr_row][curr_col] == 1:
                     self.dx = 0; self.dy = 0
 
         self.x += self.dx; self.y += self.dy
@@ -166,8 +178,6 @@ class Player:
 
         has_pellets_left = any(0 in row or 3 in row for row in LEVEL_MAP)
         if not has_pellets_left:
-            reset_board_map()
-            self.reset_position()
             cleared_board = True
 
         return ate_powerup, cleared_board
@@ -238,8 +248,8 @@ class Ghost:
             return
 
         if self.state == 'exiting':
-            exit_x = (9 * TILE_SIZE) + (TILE_SIZE // 2)
-            exit_y = (7 * TILE_SIZE) + (TILE_SIZE // 2)
+            exit_x = (GHOST_EXIT[0] * TILE_SIZE) + (TILE_SIZE // 2)
+            exit_y = (GHOST_EXIT[1] * TILE_SIZE) + (TILE_SIZE // 2)
 
             if self.x < exit_x: self.dx = self.speed; self.dy = 0
             elif self.x > exit_x: self.dx = -self.speed; self.dy = 0
@@ -287,6 +297,8 @@ class Ghost:
 
             valid_moves = []
             for move_dx, move_dy, n_col, n_row in possible_moves:
+                if not (0 <= n_row < ROWS):
+                    continue
                 if LEVEL_MAP[n_row][n_col] == 1: continue
                 if move_dx != 0 and move_dx == -self.dx: continue
                 if move_dy != 0 and move_dy == -self.dy: continue
@@ -332,17 +344,13 @@ class Ghost:
 
 
 # --- 4. MAIN GAME SETUP ---
-player = Player(1, 1)
-
-blinky = Ghost(9, 9, RED, "Blinky", 0)
-pinky =  Ghost(9, 9, PINK, "Pinky", FPS * 2)
-inky =   Ghost(8, 9, CYAN, "Inky", FPS * 4)
-clyde =  Ghost(10, 9, ORANGE, "Clyde", FPS * 6)
-
-ghosts = [blinky, pinky, inky, clyde]
+player = Player(PLAYER_START[0], PLAYER_START[1])
+ghosts = [Ghost(*ghost_config) for ghost_config in GHOST_CONFIGS]
+blinky = next((ghost for ghost in ghosts if ghost.name == "Blinky"), ghosts[0])
 
 # NEW: The core state machine
-game_state = "PLAYING" # Can be: PLAYING, DYING, GAME_OVER
+game_state = "PLAYING" # Can be: PLAYING, LEVEL_CLEAR, DYING, GAME_OVER
+level_clear_timer = 0
 
 fruit_active = False
 fruit_timer = 0
@@ -368,42 +376,57 @@ while running:
                     ghost.dy *= -1
 
         if cleared_board:
-            for ghost in ghosts:
-                ghost.reset_position()
+            game_state = "LEVEL_CLEAR"
+            level_clear_timer = 0
+            player.dx = 0
+            player.dy = 0
+            player.queued_dx = 0
+            player.queued_dy = 0
             fruit_active = False
             fruit_timer = 0
 
-        if next_fruit_index < len(FRUIT_SPAWN_SCORES) and player.score >= FRUIT_SPAWN_SCORES[next_fruit_index]:
-            fruit_active = True
-            fruit_timer = FRUIT_DURATION_FRAMES
-            next_fruit_index += 1
+        if game_state == "PLAYING":
+            if next_fruit_index < len(FRUIT_SPAWN_SCORES) and player.score >= FRUIT_SPAWN_SCORES[next_fruit_index]:
+                fruit_active = True
+                fruit_timer = FRUIT_DURATION_FRAMES
+                next_fruit_index += 1
 
-        if fruit_active:
-            fruit_timer -= 1
-            if fruit_timer <= 0:
-                fruit_active = False
+            if fruit_active:
+                fruit_timer -= 1
+                if fruit_timer <= 0:
+                    fruit_active = False
 
-            fruit_col, fruit_row = FRUIT_POSITION
-            fruit_x = (fruit_col * TILE_SIZE) + (TILE_SIZE // 2)
-            fruit_y = (fruit_row * TILE_SIZE) + (TILE_SIZE // 2)
-            if math.hypot(player.x - fruit_x, player.y - fruit_y) < TILE_SIZE // 2:
-                fruit_active = False
-                player.score += 100
+                fruit_col, fruit_row = FRUIT_POSITION
+                fruit_x = (fruit_col * TILE_SIZE) + (TILE_SIZE // 2)
+                fruit_y = (fruit_row * TILE_SIZE) + (TILE_SIZE // 2)
+                if math.hypot(player.x - fruit_x, player.y - fruit_y) < TILE_SIZE // 2:
+                    fruit_active = False
+                    player.score += 100
 
-        for ghost in ghosts:
-            ghost.update(player, blinky, player.power_timer > 0)
+            for ghost in ghosts:
+                ghost.update(player, blinky, player.power_timer > 0)
 
-            # THE COLLISION CHECK
-            # We use the Pythagorean theorem to check distance between centers.
-            # If it's less than half a tile, we have a collision.
-            distance = math.hypot(player.x - ghost.x, player.y - ghost.y)
-            if distance < TILE_SIZE // 2:
-                if player.power_timer > 0 and ghost.state == "chasing":
-                    player.score += 200
-                    ghost.reset_position()
-                else:
-                    game_state = "DYING"
-                    player.death_timer = 0
+                # THE COLLISION CHECK
+                # We use the Pythagorean theorem to check distance between centers.
+                # If it's less than half a tile, we have a collision.
+                distance = math.hypot(player.x - ghost.x, player.y - ghost.y)
+                if distance < TILE_SIZE // 2:
+                    if player.power_timer > 0 and ghost.state == "chasing":
+                        player.score += 200
+                        ghost.reset_position()
+                    else:
+                        game_state = "DYING"
+                        player.death_timer = 0
+
+    elif game_state == "LEVEL_CLEAR":
+        level_clear_timer += 1
+        if level_clear_timer >= LEVEL_CLEAR_DURATION_FRAMES:
+            reset_board_map()
+            player.reset_position()
+            player.power_timer = 0
+            for ghost in ghosts:
+                ghost.reset_position()
+            game_state = "PLAYING"
 
     elif game_state == "DYING":
         player.death_timer += 1
@@ -429,8 +452,12 @@ while running:
     for row_idx, row in enumerate(LEVEL_MAP):
         for col_idx, tile in enumerate(row):
             if tile == 1:
+                wall_color = BLUE
+                if game_state == "LEVEL_CLEAR":
+                    blink_on = (level_clear_timer // LEVEL_CLEAR_BLINK_INTERVAL) % 2 == 0
+                    wall_color = WHITE if blink_on else BLUE
                 wall_rect = pygame.Rect(col_idx * TILE_SIZE, row_idx * TILE_SIZE, TILE_SIZE, TILE_SIZE)
-                pygame.draw.rect(screen, BLUE, wall_rect, 2)
+                pygame.draw.rect(screen, wall_color, wall_rect, 2)
             elif tile == 0:
                 pygame.draw.circle(screen, WHITE, (col_idx * TILE_SIZE + TILE_SIZE // 2, row_idx * TILE_SIZE + TILE_SIZE // 2), 4)
             elif tile == 3:
@@ -458,6 +485,11 @@ while running:
     screen.blit(lives_text, (WIDTH - 150, ROWS * TILE_SIZE + 10))
 
     # UI: Game Over Overlay
+    if game_state == "LEVEL_CLEAR":
+        clear_text = font.render("LEVEL CLEAR!", True, YELLOW)
+        clear_rect = clear_text.get_rect(center=(WIDTH // 2, ROWS * TILE_SIZE + (UI_HEIGHT // 2)))
+        screen.blit(clear_text, clear_rect)
+
     if game_state == "GAME_OVER":
         # Draw a dimming overlay
         overlay = pygame.Surface((WIDTH, HEIGHT))
