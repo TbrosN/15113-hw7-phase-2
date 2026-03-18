@@ -50,6 +50,7 @@ PLAYER_START = (1, 1)
 FRUIT_POSITION = (9, 11)
 FRUIT_SPAWN_SCORES = [250, 750]
 POWER_PELLET_POSITIONS = [(1, 3), (17, 3), (1, 15), (17, 15)]
+MAGNET_POWERUP_POSITIONS = [(1, 3), (17, 15)]
 GHOST_EXIT = (9, 7)
 GHOST_CONFIGS = [
     (9, 9, RED, "Blinky", 0),
@@ -66,15 +67,17 @@ UI_HEIGHT = 50
 HEIGHT = (ROWS * TILE_SIZE) + UI_HEIGHT
 
 POWERUP_DURATION_FRAMES = FPS * 8
+MAGNET_DURATION_FRAMES = FPS * 8
 FRUIT_DURATION_FRAMES = FPS * 8
 LEVEL_CLEAR_DURATION_FRAMES = FPS * 2
 LEVEL_CLEAR_BLINK_INTERVAL = 8
+MAGNET_RADIUS_PIXELS = int(TILE_SIZE * 1.75)
 
 
 def place_power_pellets():
     for col, row in POWER_PELLET_POSITIONS:
         if LEVEL_MAP[row][col] != 1:
-            LEVEL_MAP[row][col] = 3
+            LEVEL_MAP[row][col] = 4 if (col, row) in MAGNET_POWERUP_POSITIONS else 3
 
 
 def reset_board_map():
@@ -82,6 +85,26 @@ def reset_board_map():
         for c in range(COLS):
             LEVEL_MAP[r][c] = ORIGINAL_MAP[r][c]
     place_power_pellets()
+
+
+def draw_magnet_icon(surface, center_x, center_y, radius=9):
+    # Horseshoe body
+    pygame.draw.arc(
+        surface,
+        CYAN,
+        (center_x - radius, center_y - radius, radius * 2, radius * 2),
+        math.pi * 0.15,
+        math.pi * 0.85,
+        4
+    )
+    # Magnet tips
+    tip_offset = int(radius * 0.72)
+    tip_y = center_y + int(radius * 0.32)
+    tip_size = max(2, radius // 3)
+    pygame.draw.rect(surface, RED, (center_x - tip_offset - tip_size, tip_y, tip_size, tip_size))
+    pygame.draw.rect(surface, WHITE, (center_x - tip_offset, tip_y, tip_size, tip_size))
+    pygame.draw.rect(surface, RED, (center_x + tip_offset, tip_y, tip_size, tip_size))
+    pygame.draw.rect(surface, WHITE, (center_x + tip_offset - tip_size, tip_y, tip_size, tip_size))
 
 
 reset_board_map()
@@ -104,8 +127,43 @@ class Player:
         self.lives = 3 # NEW: The safety net
         self.death_timer = 0 # NEW: Tracks the death animation
         self.power_timer = 0
+        self.magnet_timer = 0
 
         self.reset_position()
+
+    def collect_tile(self, row, col):
+        ate_powerup = False
+        tile = LEVEL_MAP[row][col]
+        if tile == 0:
+            LEVEL_MAP[row][col] = 2
+            self.score += 10
+        elif tile == 3:
+            LEVEL_MAP[row][col] = 2
+            self.score += 50
+            self.power_timer = POWERUP_DURATION_FRAMES
+            ate_powerup = True
+        elif tile == 4:
+            LEVEL_MAP[row][col] = 2
+            self.score += 50
+            self.magnet_timer = MAGNET_DURATION_FRAMES
+        return ate_powerup
+
+    def collect_nearby_pellets(self):
+        ate_powerup = False
+        for row in range(ROWS):
+            for col in range(COLS):
+                tile = LEVEL_MAP[row][col]
+                if tile not in (0, 3):
+                    continue
+                pellet_x = (col * TILE_SIZE) + (TILE_SIZE // 2)
+                pellet_y = (row * TILE_SIZE) + (TILE_SIZE // 2)
+                if math.hypot(self.x - pellet_x, self.y - pellet_y) <= MAGNET_RADIUS_PIXELS:
+                    ate_powerup = self.collect_tile(row, col) or ate_powerup
+        return ate_powerup
+
+    def clear_powerups(self):
+        self.power_timer = 0
+        self.magnet_timer = 0
 
     def reset_position(self):
         # We need to call this whenever we lose a life or clear the board
@@ -164,19 +222,15 @@ class Player:
         elif self.x > WIDTH: self.x -= WIDTH
 
         current_col = int(self.x // TILE_SIZE); current_row = int(self.y // TILE_SIZE)
-        if LEVEL_MAP[current_row][current_col] == 0:
-            LEVEL_MAP[current_row][current_col] = 2
-            self.score += 10
-        elif LEVEL_MAP[current_row][current_col] == 3:
-            LEVEL_MAP[current_row][current_col] = 2
-            self.score += 50
-            self.power_timer = POWERUP_DURATION_FRAMES
-            ate_powerup = True
+        ate_powerup = self.collect_tile(current_row, current_col) or ate_powerup
 
         if self.power_timer > 0:
             self.power_timer -= 1
+        if self.magnet_timer > 0:
+            ate_powerup = self.collect_nearby_pellets() or ate_powerup
+            self.magnet_timer -= 1
 
-        has_pellets_left = any(0 in row or 3 in row for row in LEVEL_MAP)
+        has_pellets_left = any(0 in row or 3 in row or 4 in row for row in LEVEL_MAP)
         if not has_pellets_left:
             cleared_board = True
 
@@ -416,6 +470,7 @@ while running:
                         ghost.reset_position()
                     else:
                         game_state = "DYING"
+                        player.clear_powerups()
                         player.death_timer = 0
 
     elif game_state == "LEVEL_CLEAR":
@@ -423,7 +478,7 @@ while running:
         if level_clear_timer >= LEVEL_CLEAR_DURATION_FRAMES:
             reset_board_map()
             player.reset_position()
-            player.power_timer = 0
+            player.clear_powerups()
             for ghost in ghosts:
                 ghost.reset_position()
             game_state = "PLAYING"
@@ -437,6 +492,7 @@ while running:
             if player.lives > 0:
                 # Still have lives left? Reset the board positions.
                 player.reset_position()
+                player.clear_powerups()
                 for ghost in ghosts:
                     ghost.reset_position()
                 game_state = "PLAYING"
@@ -462,6 +518,10 @@ while running:
                 pygame.draw.circle(screen, WHITE, (col_idx * TILE_SIZE + TILE_SIZE // 2, row_idx * TILE_SIZE + TILE_SIZE // 2), 4)
             elif tile == 3:
                 pygame.draw.circle(screen, WHITE, (col_idx * TILE_SIZE + TILE_SIZE // 2, row_idx * TILE_SIZE + TILE_SIZE // 2), 9)
+            elif tile == 4:
+                center_x = col_idx * TILE_SIZE + TILE_SIZE // 2
+                center_y = row_idx * TILE_SIZE + TILE_SIZE // 2
+                draw_magnet_icon(screen, center_x, center_y, 9)
 
     if fruit_active:
         fruit_col, fruit_row = FRUIT_POSITION
@@ -483,6 +543,11 @@ while running:
     # UI: Lives (Right aligned)
     lives_text = font.render(f"LIVES: {player.lives}", True, YELLOW)
     screen.blit(lives_text, (WIDTH - 150, ROWS * TILE_SIZE + 10))
+
+    if player.magnet_timer > 0:
+        magnet_text = font.render("MAGNET", True, CYAN)
+        magnet_rect = magnet_text.get_rect(center=(WIDTH // 2, ROWS * TILE_SIZE + (UI_HEIGHT // 2)))
+        screen.blit(magnet_text, magnet_rect)
 
     # UI: Game Over Overlay
     if game_state == "LEVEL_CLEAR":
