@@ -402,13 +402,30 @@ player = Player(PLAYER_START[0], PLAYER_START[1])
 ghosts = [Ghost(*ghost_config) for ghost_config in GHOST_CONFIGS]
 blinky = next((ghost for ghost in ghosts if ghost.name == "Blinky"), ghosts[0])
 
-# NEW: The core state machine
-game_state = "PLAYING" # Can be: PLAYING, LEVEL_CLEAR, DYING, GAME_OVER
-level_clear_timer = 0
-
 fruit_active = False
 fruit_timer = 0
 next_fruit_index = 0
+
+
+def reset_game():
+    global game_state, level_clear_timer, fruit_active, fruit_timer, next_fruit_index
+    reset_board_map()
+    player.score = 0
+    player.lives = 3
+    player.reset_position()
+    player.clear_powerups()
+    for ghost in ghosts:
+        ghost.reset_position()
+    game_state = "PLAYING"
+    level_clear_timer = 0
+    fruit_active = False
+    fruit_timer = 0
+    next_fruit_index = 0
+
+
+# NEW: The core state machine
+game_state = "PLAYING" # Can be: PLAYING, PAUSED, LEVEL_CLEAR, DYING, GAME_OVER
+level_clear_timer = 0
 
 # --- 5. GAME LOOP ---
 running = True
@@ -416,6 +433,18 @@ while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_p:
+                if game_state == "PLAYING":
+                    game_state = "PAUSED"
+                elif game_state == "PAUSED":
+                    game_state = "PLAYING"
+            elif event.key == pygame.K_ESCAPE and game_state == "PAUSED":
+                game_state = "PLAYING"
+            elif event.key == pygame.K_r and game_state in ("PAUSED", "GAME_OVER"):
+                reset_game()
+            elif event.key == pygame.K_q and game_state in ("PAUSED", "GAME_OVER"):
+                running = False
 
     # --- LOGIC UPDATES ---
     if game_state == "PLAYING":
@@ -564,8 +593,30 @@ while running:
 
         # Draw the text right in the middle
         go_text = large_font.render("GAME OVER", True, RED)
-        text_rect = go_text.get_rect(center=(WIDTH // 2, HEIGHT // 2))
+        text_rect = go_text.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 20))
         screen.blit(go_text, text_rect)
+
+        restart_text = font.render("Press R to Restart or Q to Quit", True, WHITE)
+        restart_rect = restart_text.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 30))
+        screen.blit(restart_text, restart_rect)
+
+    if game_state == "PAUSED":
+        overlay = pygame.Surface((WIDTH, HEIGHT))
+        overlay.set_alpha(150)
+        overlay.fill(BLACK)
+        screen.blit(overlay, (0, 0))
+
+        paused_text = large_font.render("PAUSED", True, YELLOW)
+        paused_rect = paused_text.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 40))
+        screen.blit(paused_text, paused_rect)
+
+        controls_text = font.render("Press P or Esc to Resume", True, WHITE)
+        controls_rect = controls_text.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 10))
+        screen.blit(controls_text, controls_rect)
+
+        restart_text = font.render("Press R to Restart or Q to Quit", True, WHITE)
+        restart_rect = restart_text.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 45))
+        screen.blit(restart_text, restart_rect)
 
     pygame.display.flip()
     clock.tick(FPS)
