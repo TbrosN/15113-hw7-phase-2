@@ -12,6 +12,7 @@ A polished Pac-Man-style game built with `pygame`, now with multiple levels, bon
 - Level clear wall-blink animation before advancing
 - Multi-level support with per-level maps, spawns, and metadata
 - Pause menu (`P`/`Esc`) plus restart/quit options in pause and game-over states
+- Fun sound effects and background music
 
 ## Controls
 
