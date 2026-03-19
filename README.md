@@ -21,6 +21,7 @@ A polished Pac-Man-style game built with `pygame`, now with multiple levels, bon
 - `Esc`: Resume while paused
 - `R`: Restart from pause or game over
 - `Q`: Quit from pause or game over
+- `N`: Skip to next level (check out the second level!)
 
 ## How to Run
 
