@@ -1,3 +1,4 @@
+import os
 import pygame
 import sys
 import math
@@ -5,6 +6,12 @@ from levels import LEVELS
 
 # --- 1. SETTINGS & CONSTANTS ---
 pygame.init()
+_mixer_ok = False
+try:
+    pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
+    _mixer_ok = True
+except pygame.error:
+    pass
 
 TILE_SIZE = 30
 FPS = 60
@@ -92,6 +99,67 @@ clock = pygame.time.Clock()
 font = pygame.font.SysFont("Arial", 28, bold=True)
 large_font = pygame.font.SysFont("Arial", 48, bold=True)
 
+_SOUNDS_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sounds", "third_party")
+_KENNEY_AUDIO = os.path.join(_SOUNDS_ROOT, "kenney_digital-audio", "Audio")
+
+
+def _load_sound(path):
+    if not _mixer_ok or not os.path.isfile(path):
+        return None
+    try:
+        return pygame.mixer.Sound(path)
+    except pygame.error:
+        return None
+
+
+snd_wakka = _load_sound(os.path.join(_SOUNDS_ROOT, "pacman_wakka.wav"))
+snd_power_pellet = _load_sound(os.path.join(_KENNEY_AUDIO, "powerUp5.ogg"))
+snd_magnet_pickup = _load_sound(os.path.join(_KENNEY_AUDIO, "phaseJump2.ogg"))
+snd_ghost_eaten = _load_sound(os.path.join(_KENNEY_AUDIO, "pepSound4.ogg"))
+snd_death = _load_sound(os.path.join(_KENNEY_AUDIO, "lowDown.ogg"))
+snd_fruit = _load_sound(os.path.join(_KENNEY_AUDIO, "powerUp1.ogg"))
+snd_level_clear = _load_sound(os.path.join(_KENNEY_AUDIO, "highUp.ogg"))
+
+_BGM_PATH = os.path.join(_SOUNDS_ROOT, "pacman_background_music.ogg")
+_bgm_enabled = False
+if _mixer_ok and os.path.isfile(_BGM_PATH):
+    try:
+        pygame.mixer.music.load(_BGM_PATH)
+        pygame.mixer.music.set_volume(0.22)
+        pygame.mixer.music.play(-1)
+        _bgm_enabled = True
+    except pygame.error:
+        pass
+
+
+def pause_bgm():
+    if _bgm_enabled:
+        pygame.mixer.music.pause()
+
+
+def resume_bgm():
+    if _bgm_enabled:
+        pygame.mixer.music.unpause()
+
+
+def stop_bgm():
+    if _bgm_enabled:
+        pygame.mixer.music.stop()
+
+
+def restart_bgm():
+    if _bgm_enabled:
+        pygame.mixer.music.play(-1)
+
+
+def play_eat_sounds(counts):
+    if counts["power"] and snd_power_pellet:
+        snd_power_pellet.play()
+    if counts["magnet"] and snd_magnet_pickup:
+        snd_magnet_pickup.play()
+    if counts["pellet"] and snd_wakka:
+        snd_wakka.play()
+
 
 # --- 2. THE PLAYER CLASS ---
 class Player:
@@ -110,23 +178,28 @@ class Player:
 
     def collect_tile(self, row, col):
         ate_powerup = False
+        eat_kind = None
         tile = LEVEL_MAP[row][col]
         if tile == 0:
             LEVEL_MAP[row][col] = 2
             self.score += 10
+            eat_kind = "pellet"
         elif tile == 3:
             LEVEL_MAP[row][col] = 2
             self.score += 50
             self.power_timer = POWERUP_DURATION_FRAMES
             ate_powerup = True
+            eat_kind = "power"
         elif tile == 4:
             LEVEL_MAP[row][col] = 2
             self.score += 50
             self.magnet_timer = MAGNET_DURATION_FRAMES
-        return ate_powerup
+            eat_kind = "magnet"
+        return ate_powerup, eat_kind
 
     def collect_nearby_pellets(self):
         ate_powerup = False
+        counts = {"pellet": 0, "power": 0, "magnet": 0}
         for row in range(ROWS):
             for col in range(COLS):
                 tile = LEVEL_MAP[row][col]
@@ -135,8 +208,11 @@ class Player:
                 pellet_x = (col * TILE_SIZE) + (TILE_SIZE // 2)
                 pellet_y = (row * TILE_SIZE) + (TILE_SIZE // 2)
                 if math.hypot(self.x - pellet_x, self.y - pellet_y) <= MAGNET_RADIUS_PIXELS:
-                    ate_powerup = self.collect_tile(row, col) or ate_powerup
-        return ate_powerup
+                    ap, kind = self.collect_tile(row, col)
+                    ate_powerup = ate_powerup or ap
+                    if kind:
+                        counts[kind] += 1
+        return ate_powerup, counts
 
     def clear_powerups(self):
         self.power_timer = 0
@@ -155,6 +231,7 @@ class Player:
     def update(self, keys):
         ate_powerup = False
         cleared_board = False
+        eat_counts = {"pellet": 0, "power": 0, "magnet": 0}
 
         if keys[pygame.K_LEFT]:
             self.queued_dx = -self.speed; self.queued_dy = 0
@@ -199,19 +276,25 @@ class Player:
         elif self.x > WIDTH: self.x -= WIDTH
 
         current_col = int(self.x // TILE_SIZE); current_row = int(self.y // TILE_SIZE)
-        ate_powerup = self.collect_tile(current_row, current_col) or ate_powerup
+        ap_tile, kind_tile = self.collect_tile(current_row, current_col)
+        ate_powerup = ate_powerup or ap_tile
+        if kind_tile:
+            eat_counts[kind_tile] += 1
 
         if self.power_timer > 0:
             self.power_timer -= 1
         if self.magnet_timer > 0:
-            ate_powerup = self.collect_nearby_pellets() or ate_powerup
+            ap_mag, mag_counts = self.collect_nearby_pellets()
+            ate_powerup = ate_powerup or ap_mag
+            for k in eat_counts:
+                eat_counts[k] += mag_counts[k]
             self.magnet_timer -= 1
 
         has_pellets_left = any(0 in row or 3 in row or 4 in row for row in LEVEL_MAP)
         if not has_pellets_left:
             cleared_board = True
 
-        return ate_powerup, cleared_board
+        return ate_powerup, cleared_board, eat_counts
 
     def draw(self, surface, game_state):
         # Don't draw if dead-dead
@@ -440,6 +523,7 @@ def reset_game():
     fruit_active = False
     fruit_timer = 0
     next_fruit_index = 0
+    restart_bgm()
 
 
 # NEW: The core state machine
@@ -456,10 +540,13 @@ while running:
             if event.key == pygame.K_p:
                 if game_state == "PLAYING":
                     game_state = "PAUSED"
+                    pause_bgm()
                 elif game_state == "PAUSED":
                     game_state = "PLAYING"
+                    resume_bgm()
             elif event.key == pygame.K_ESCAPE and game_state == "PAUSED":
                 game_state = "PLAYING"
+                resume_bgm()
             elif event.key == pygame.K_r and game_state in ("PAUSED", "GAME_OVER"):
                 reset_game()
             elif event.key == pygame.K_q and game_state in ("PAUSED", "GAME_OVER"):
@@ -468,7 +555,8 @@ while running:
     # --- LOGIC UPDATES ---
     if game_state == "PLAYING":
         keys = pygame.key.get_pressed()
-        ate_powerup, cleared_board = player.update(keys)
+        ate_powerup, cleared_board, eat_counts = player.update(keys)
+        play_eat_sounds(eat_counts)
 
         if ate_powerup:
             # Quick turnaround when the player grabs a power pellet.
@@ -479,6 +567,8 @@ while running:
 
         if cleared_board:
             game_state = "LEVEL_CLEAR"
+            if snd_level_clear:
+                snd_level_clear.play()
             level_clear_timer = 0
             player.dx = 0
             player.dy = 0
@@ -504,6 +594,8 @@ while running:
                 if math.hypot(player.x - fruit_x, player.y - fruit_y) < TILE_SIZE // 2:
                     fruit_active = False
                     player.score += 100
+                    if snd_fruit:
+                        snd_fruit.play()
 
             for ghost in ghosts:
                 ghost.update(player, blinky, player.power_timer > 0)
@@ -516,10 +608,15 @@ while running:
                     if player.power_timer > 0 and ghost.state == "chasing":
                         player.score += 200
                         ghost.reset_position()
+                        if snd_ghost_eaten:
+                            snd_ghost_eaten.play()
                     else:
                         game_state = "DYING"
                         player.clear_powerups()
                         player.death_timer = 0
+                        pause_bgm()
+                        if snd_death:
+                            snd_death.play()
 
     elif game_state == "LEVEL_CLEAR":
         level_clear_timer += 1
@@ -540,9 +637,11 @@ while running:
                 for ghost in ghosts:
                     ghost.reset_position()
                 game_state = "PLAYING"
+                resume_bgm()
             else:
                 # No lives left. Game Over.
                 game_state = "GAME_OVER"
+                stop_bgm()
 
 
     # --- DRAWING ---

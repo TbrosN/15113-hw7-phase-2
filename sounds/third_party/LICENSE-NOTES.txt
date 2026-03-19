@@ -1,0 +1,9 @@
+OpenGameArt (remaxim) — CC-BY-SA 3.0
+  pacman_wakka.wav
+  pacman_background_music.ogg
+  https://creativecommons.org/licenses/by-sa/3.0/
+  Credit: remaxim, via OpenGameArt.org
+
+Kenney Digital Audio — CC0
+  kenney_digital-audio/ (entire folder)
+  https://creativecommons.org/publicdomain/zero/1.0/

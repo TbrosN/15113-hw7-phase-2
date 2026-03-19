@@ -31,3 +31,7 @@ let's draw a magnet icon for the powerup so its clear what it does
 lets implement this, but make the levels in a separate file to avoid cluttering this. Might be worth writing small functions to generate your levels
 
 @README.md Lets make this README prettier and update it to explain the features that we now support.
+
+Do some research to find the pacman sound files that we need, and then download them from the command line if possible (otherwise, give me the links and I can download/import them here manually).
+
+ok cool, let's go ahead and wire up these sounds to play in our game.
