@@ -1,0 +1,31 @@
+I used Cursor for this.
+
+@code.py This game is a bit too tall on my screen, is there a way to detect the screen size we're running on and set the height to like 90% of that
+
+@code.py let's add fruits and powerups to this
+
+when we finish the level, let's add a nice blinking animation like the real game. Also, please make a very small sample level so I can easily test this out
+
+hitting this when playing the small level:
+  File "/Users/treybrosnan/Projects/15113/15113-hw7-phase-2/code.py", line 430, in <module>
+    ghost.update(player, blinky, player.power_timer > 0)
+  File "/Users/treybrosnan/Projects/15113/15113-hw7-phase-2/code.py", line 325, in update
+    if LEVEL_MAP[n_row][n_col] == 1: continue
+       ~~~~~~~~~^^^^^^^
+IndexError: list index out of range
+
+the sample level is actually really buggy lets just remove it entirely
+
+let's add a magnet powerup that replaces some of the pellet powerups in the map. When active, you collect all nearby pellets as you move, and this even goes through walls.
+
+when you die, you should lose all powerups
+
+let's draw a magnet icon for the powerup so its clear what it does
+
+@code.py let's add a pause menu, and also when the game ends, it should give you an option to restart
+
+@code.py:156 what is this hard-coded 0,3 here?
+
+@code.py this is a pacman game. Right now, we have just one level, and the window size depends on the level size. Whats the lowest-lift way to support multiple levels, possibly of different sizes?
+
+lets implement this, but make the levels in a separate file to avoid cluttering this. Might be worth writing small functions to generate your levels
