@@ -47,3 +47,5 @@ wait are there not other maps too? Please include a few more, if they dont exist
 to make it easier to debug, please make pressing "N" go to the next level (wrapping around to level 1 if at the last level)
 
 @levels These levels all feel to similar, can we redesign them and make them more varied and creative? Also, make sure to scatter some magnet powerups around the map, in addition to power pellets! (see how we parse in @levels.py )
+
+this is better, but please clean these up to make sure there are no dead ends for the player, for instance here in level 1 @levels/1.txt:12-13 , ro the right of the player spawn
