@@ -409,26 +409,49 @@ class Ghost:
                 (self.speed, 0, (col + 1) % COLS, row)
             ]
 
-            valid_moves = []
-            for move_dx, move_dy, n_col, n_row in possible_moves:
-                if not (0 <= n_row < ROWS):
-                    continue
-                if LEVEL_MAP[n_row][n_col] == 1: continue
-                if move_dx != 0 and move_dx == -self.dx: continue
-                if move_dy != 0 and move_dy == -self.dy: continue
-                distance = (n_col - t_col)**2 + (n_row - t_row)**2
-                valid_moves.append((distance, move_dx, move_dy))
+            def collect_valid_moves(allow_reverse):
+                moves = []
+                for move_dx, move_dy, n_col, n_row in possible_moves:
+                    if not (0 <= n_row < ROWS):
+                        continue
+                    if LEVEL_MAP[n_row][n_col] == 1:
+                        continue
+                    if not allow_reverse:
+                        if move_dx != 0 and move_dx == -self.dx:
+                            continue
+                        if move_dy != 0 and move_dy == -self.dy:
+                            continue
+                    distance = (n_col - t_col) ** 2 + (n_row - t_row) ** 2
+                    moves.append((distance, move_dx, move_dy))
+                return moves
+
+            valid_moves = collect_valid_moves(allow_reverse=False)
+            if not valid_moves:
+                # No forward turn: e.g. top row with dy<0 (reverse is illegal above) or
+                # misaligned exit leaving us in a wall row — allow U-turn so we don't drift off-map.
+                valid_moves = collect_valid_moves(allow_reverse=True)
 
             if valid_moves:
                 if power_active:
                     valid_moves.sort(key=lambda x: x[0], reverse=True)
                 else:
                     valid_moves.sort(key=lambda x: x[0])
-                self.dx = valid_moves[0][1]; self.dy = valid_moves[0][2]
+                self.dx = valid_moves[0][1]
+                self.dy = valid_moves[0][2]
+            else:
+                self.dx = 0
+                self.dy = 0
 
-        self.x += self.dx; self.y += self.dy
-        if self.x < 0: self.x += WIDTH
-        elif self.x > WIDTH: self.x -= WIDTH
+        self.x += self.dx
+        self.y += self.dy
+        if self.x < 0:
+            self.x += WIDTH
+        elif self.x > WIDTH:
+            self.x -= WIDTH
+        # Maze has a wall border on top/bottom (no vertical wrap); keep ghosts in playable rows.
+        min_play_y = TILE_SIZE + (TILE_SIZE // 2)
+        max_play_y = (ROWS - 2) * TILE_SIZE + (TILE_SIZE // 2)
+        self.y = max(min_play_y, min(max_play_y, self.y))
 
     def draw(self, surface, game_state):
         # We don't draw the ghosts if Pac-Man is currently folding into himself
@@ -551,16 +574,16 @@ while running:
                 reset_game()
             elif event.key == pygame.K_q and game_state in ("PAUSED", "GAME_OVER"):
                 running = False
-            # NOTE Next-level key is just for debugging
-            # elif event.key == pygame.K_n and game_state in ("PLAYING", "PAUSED", "LEVEL_CLEAR"):
-            #     if game_state == "PAUSED":
-            #         resume_bgm()
-            #     load_level(current_level_index + 1, keep_progress=True)
-            #     game_state = "PLAYING"
-            #     level_clear_timer = 0
-            #     fruit_active = False
-            #     fruit_timer = 0
-            #     next_fruit_index = 0
+            # NOTE Next-level key is mainly for debugging, but we keep it here as an easter egg
+            elif event.key == pygame.K_n and game_state in ("PLAYING", "PAUSED", "LEVEL_CLEAR"):
+                if game_state == "PAUSED":
+                    resume_bgm()
+                load_level(current_level_index + 1, keep_progress=True)
+                game_state = "PLAYING"
+                level_clear_timer = 0
+                fruit_active = False
+                fruit_timer = 0
+                next_fruit_index = 0
 
     # --- LOGIC UPDATES ---
     if game_state == "PLAYING":

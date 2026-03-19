@@ -51,3 +51,7 @@ to make it easier to debug, please make pressing "N" go to the next level (wrapp
 this is better, but please clean these up to make sure there are no dead ends for the player, for instance here in level 1 @levels/1.txt:12-13 , ro the right of the player spawn
 
 (ended up not using the result because the levels got boring/similar again)
+
+For fun, let's add a level to @levels where the map is really open (very few walls, if any), and there is only one pellet you need to collect. But there are NO powerups, and lots of ghosts. You spawn in the top left and need to copllect a pellet way down in the bottom right.
+
+I amde this level 0 to test easier. but wait the ghosts are acting weird on this map, they are just moving upward and then going off the screen. Can we fix this?
