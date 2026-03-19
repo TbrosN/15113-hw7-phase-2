@@ -1,4 +1,4 @@
-I used Cursor for this.
+I used Cursor (mix of Composer 2 and Codex 5.3) for coding, with Gemini for general questions/research.
 
 @code.py This game is a bit too tall on my screen, is there a way to detect the screen size we're running on and set the height to like 90% of that
 
@@ -35,3 +35,15 @@ lets implement this, but make the levels in a separate file to avoid cluttering 
 Do some research to find the pacman sound files that we need, and then download them from the command line if possible (otherwise, give me the links and I can download/import them here manually).
 
 ok cool, let's go ahead and wire up these sounds to play in our game.
+
+Hey, I'm buliding a pacman clone and I want to find actual pacman levels that I can copy. Whats the best way to do this? Find suitable websites/images/etc that would help me, and also suggest how we can get the levels into pygame code.
+
+ok cool, can you fetch the actual levels I need, say as txt files that I can copy/paste into my app?
+
+wait are there not other maps too? Please include a few more, if they dont exist then just improvise some.
+
+@levels/1.txt as you can see, I added some text-based levels in levels/. Please refactor how we are parsing levels @levels.py to hadnle these, and feel free to remove all of the hard-coded or generated levels existing in levels.py
+
+to make it easier to debug, please make pressing "N" go to the next level (wrapping around to level 1 if at the last level)
+
+@levels These levels all feel to similar, can we redesign them and make them more varied and creative? Also, make sure to scatter some magnet powerups around the map, in addition to power pellets! (see how we parse in @levels.py )

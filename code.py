@@ -551,6 +551,15 @@ while running:
                 reset_game()
             elif event.key == pygame.K_q and game_state in ("PAUSED", "GAME_OVER"):
                 running = False
+            elif event.key == pygame.K_n and game_state in ("PLAYING", "PAUSED", "LEVEL_CLEAR"):
+                if game_state == "PAUSED":
+                    resume_bgm()
+                load_level(current_level_index + 1, keep_progress=True)
+                game_state = "PLAYING"
+                level_clear_timer = 0
+                fruit_active = False
+                fruit_timer = 0
+                next_fruit_index = 0
 
     # --- LOGIC UPDATES ---
     if game_state == "PLAYING":
