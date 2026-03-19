@@ -29,3 +29,5 @@ let's draw a magnet icon for the powerup so its clear what it does
 @code.py this is a pacman game. Right now, we have just one level, and the window size depends on the level size. Whats the lowest-lift way to support multiple levels, possibly of different sizes?
 
 lets implement this, but make the levels in a separate file to avoid cluttering this. Might be worth writing small functions to generate your levels
+
+@README.md Lets make this README prettier and update it to explain the features that we now support.
